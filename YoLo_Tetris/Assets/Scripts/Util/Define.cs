@@ -12,5 +12,33 @@ public class Define
         Game,
     }
 
+    public enum InputState
+    {
+        None,
+        Click,
+        Drag,
+
+    }
+
+    public enum MoveDir
+    {
+        Idle,
+        Left,
+        Right,  
+        SlowDown,
+        QuickDown,
+
+    }
+
+    public enum RotationDir
+    {
+        Idle,
+        Left,
+        Right,
+        
+    }
+
+    
+
 
 }

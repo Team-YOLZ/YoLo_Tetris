@@ -10987,7 +10987,7 @@ Camera:
   near clip plane: 0.3
   far clip plane: 1000
   field of view: 60
-  orthographic: 0
+  orthographic: 1
   orthographic size: 5
   m_Depth: -1
   m_CullingMask:
@@ -13128,6 +13128,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1571949899}
+  - component: {fileID: 1571949900}
   m_Layer: 5
   m_Name: O_Tetromino
   m_TagString: Untagged
@@ -13158,6 +13159,20 @@ RectTransform:
   m_AnchoredPosition: {x: -60, y: 660}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
+--- !u!114 &1571949900
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1571949898}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 26b6bee7b1d6f404cb54ed5c866c7110, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _mino: {fileID: 0}
+  _fallingSpeed: 500
 --- !u!1 &1576572039
 GameObject:
   m_ObjectHideFlags: 0
