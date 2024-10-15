@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using DG.Tweening;
 using static Define;
+using System;
 
 public class MinoController : MonoBehaviour
 {
@@ -12,21 +13,8 @@ public class MinoController : MonoBehaviour
     //private bool _isMoving = false; 
     private bool _isLanding = false; //착지했는가?
 
-    private InputState _inputState = InputState.None;
-    public InputState MinoState
-    {
-        get { return _inputState; }
-        set
-        {
-            if (_inputState == value)
-                return;
+    private InputManager _inputManager;
 
-            _inputState = value;
-        }
-    }
-
-    //MoveDir _move = MoveDir.Idle;
-    //RotationDir _rotation = RotationDir.Idle;
 
     private MoveDir _move = MoveDir.Idle;
     public MoveDir MinoMove
@@ -60,31 +48,37 @@ public class MinoController : MonoBehaviour
         {
             _mino = gameObject.GetComponent<RectTransform>();
         }
-    }
 
-    void Start()
-    {
-        StartCoroutine(AutoDownMove());
-    }
-
-    void Update()
-    {
-        UpdateController();
-    }
-
-    void UpdateController()
-    {
-        switch (MinoState)
+        if (_inputManager == null)
         {
-            case InputState.Click:
+            _inputManager = GameObject.Find("InputScreen").GetComponent<InputManager>();
+        }
+        _inputManager.TouchAction += TouchState;
+
+        StartCoroutine(AutoDownMove());
+
+    }
+
+    // 화면 : 드래그 or 클릭
+    void TouchState(TouchEvent touchEvent, Vector2 position)
+    {
+        switch (touchEvent)
+        {
+            case TouchEvent.Click:
+                if (Camera.main.ScreenToWorldPoint(position).x >= 0)
+                    _rotation = RotationDir.Right;
+                else
+                    _rotation = RotationDir.Left;
                 UpdateRotation();
                 break;
-            case InputState.Drag:
-                UpdateMove();
+
+            case TouchEvent.Drag:
+                UpdateMove(position);
                 break;
         }
     }
 
+    //화면 클릭 -> 회전
     void UpdateRotation()
     {
         switch (MinoRotation)
@@ -98,7 +92,9 @@ public class MinoController : MonoBehaviour
         }
 
     }
-    void UpdateMove()
+
+    //화면 드래그 -> 이동
+    void UpdateMove(Vector2 position)
     {
         switch (MinoMove)
         {
