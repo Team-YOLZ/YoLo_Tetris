@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
+
 public class Managers : Singleton <Managers>
 {
     ResourceManager _resource = new ResourceManager();
@@ -10,19 +11,22 @@ public class Managers : Singleton <Managers>
     SceneManagerEx _scene = new SceneManagerEx();
     public static SceneManagerEx Scene { get { return Instance._scene; } }
 
+    //InputManager _input = new InputManager();
+    //public static InputManager Input { get { return Instance._input; } }
+
     void Start()
     {
-        Init();
         
     }
 
     void Update()
     {
-        
+        //_input.OnUpdate();
     }
 
     protected override void Init()
     {
-        throw new System.NotImplementedException();
+        //_input.Init();
+        Debug.Log("Managers Init..");
     }
 }

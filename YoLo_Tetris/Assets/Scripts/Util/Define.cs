@@ -12,7 +12,7 @@ public class Define
         Game,
     }
 
-    public enum InputState
+    public enum TouchEvent
     {
         None,
         Click,
