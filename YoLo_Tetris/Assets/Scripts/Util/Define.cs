@@ -27,6 +27,8 @@ public class Define
         Right,  
         SlowDown,
         QuickDown,
+        HorizonDir,
+        VerticalDir,
 
     }
 
