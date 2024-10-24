@@ -7,62 +7,26 @@ using static Define;
 using UnityEngine.UI;
 using TMPro;
 
-public class InputManager : MonoBehaviour ,IPointerClickHandler , IPointerDownHandler, IDragHandler, IEndDragHandler
+public class InputManager : Singleton<InputManager>, IPointerClickHandler , IPointerDownHandler, IDragHandler, IEndDragHandler
 {
-    public Action<TouchEvent, Vector2, Vector2> TouchAction = null;
+    public Action<TouchEvent, RotationDir, Vector2, Vector2> TouchAction = null;
     public Action<bool> IsEndDragAction = null;
     public Action<Vector2> BeginDragAction = null;
 
     private bool _isDrag = false;
 
-    //test
-    public Vector2 TouchPosition = Vector2.zero;
-    public TMP_Text text1; 
-    public TMP_Text text2;
-    public RectTransform canvasRect;
-    public GameObject mino;
 
-    //test
-    void Start()
+    protected override void Init()
     {
-        Init();
-    }
-
-    //test
-    public void Init()
-    {
-        text1 = GameObject.Find("TestText1").GetComponent<TMP_Text>();
-        text2 = GameObject.Find("TestText2").GetComponent<TMP_Text>();
-
-        text1.text = "Init Success!";
-        text2.text = "Init Success!";
     }
 
     public void OnPointerClick(PointerEventData eventData)
     {
         if (_isDrag)
             return;
-        TouchAction.Invoke(TouchEvent.Click, eventData.position, eventData.delta);
 
-
-        //test
-        //화면상의 좌표
-        TouchPosition = eventData.position;
-        //화면좌표 -> 월드좌표
-        Vector2 worldVec = Camera.main.ScreenToWorldPoint(TouchPosition);
-        //월드좌표 -> 다시 스크린좌표
-        Vector2 screenVec = Camera.main.WorldToScreenPoint(worldVec);
-        //스크린좌표 -> canvas내의 좌표로 변환
-        Vector2 rectVec = Vector2.zero;
-        RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRect, screenVec, Camera.main, out rectVec);
-        mino.GetComponent<RectTransform>().anchoredPosition = rectVec;
-        //Debug.Log("화면 : "+TouchPosition.ToString());
-        //Debug.Log("월드 : " + worldVec.ToString());
-        //Debug.Log("다시 화면 : " + screenVec.ToString());
-        //Debug.Log("canvas 좌표 : " + rectVec.ToString());
-
-        text1.text = screenVec.ToString();
-        text2.text = TouchPosition.ToString();
+        var leftRight = Camera.main.ScreenToWorldPoint(eventData.position).x >= 0 ? RotationDir.Right : RotationDir.Left;
+        TouchAction.Invoke(TouchEvent.Click, leftRight, eventData.position, eventData.delta);
 
     }
 
@@ -73,17 +37,8 @@ public class InputManager : MonoBehaviour ,IPointerClickHandler , IPointerDownHa
 
     public void OnDrag(PointerEventData eventData)
     {
-        TouchAction.Invoke(TouchEvent.Drag, eventData.position, eventData.delta);
+        TouchAction.Invoke(TouchEvent.Drag, RotationDir.Idle, eventData.position, eventData.delta);
         _isDrag = true;
-
-
-        //test
-        TouchPosition = eventData.position;
-        TouchPosition = Camera.main.ScreenToWorldPoint(TouchPosition);
-        //Debug.Log("Drag");
-        text1.text = "Drag";
-        text2.text = TouchPosition.ToString();
-        //Debug.Log(eventData.delta);
 
     }
 
