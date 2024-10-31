@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   MinoType: 79
   HorizonBoundary:
-    R0: {x: -280, y: 280}
-    R1: {x: -280, y: 280}
-    R2: {x: -280, y: 280}
-    R3: {x: -280, y: 280}
+    R0: {x: -260, y: 260}
+    R1: {x: -260, y: 260}
+    R2: {x: -260, y: 260}
+    R3: {x: -260, y: 260}
