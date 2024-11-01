@@ -30,14 +30,14 @@ public class Define
 
     }
 
-    public enum HorizonDir
+    public enum DragHorizonDir
     {
         Idle,
         Left,
         Right,
     }
 
-    public enum RotationDir
+    public enum ClickHorizonDir 
     {
         Idle,
         Left,
@@ -58,6 +58,7 @@ public class Define
 
     }
 
+    // 반시계방향 left click
     public enum MinoRotationState
     {
         R0, //초기상태 0 (0)

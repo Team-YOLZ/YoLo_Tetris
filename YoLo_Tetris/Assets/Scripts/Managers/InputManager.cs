@@ -9,7 +9,7 @@ using TMPro;
 
 public class InputManager : Singleton<InputManager>, IPointerClickHandler , IPointerDownHandler, IDragHandler, IEndDragHandler
 {
-    public Action<TouchEvent, RotationDir, Vector2, Vector2> TouchAction = null;
+    public Action<TouchEvent, ClickHorizonDir, Vector2, Vector2> TouchAction = null;
     public Action<bool> IsEndDragAction = null;
     public Action<Vector2> BeginDragAction = null;
 
@@ -25,7 +25,7 @@ public class InputManager : Singleton<InputManager>, IPointerClickHandler , IPoi
         if (_isDrag)
             return;
 
-        var leftRight = Camera.main.ScreenToWorldPoint(eventData.position).x >= 0 ? RotationDir.Right : RotationDir.Left;
+        var leftRight = Camera.main.ScreenToWorldPoint(eventData.position).x >= 0 ? ClickHorizonDir.Right : ClickHorizonDir.Left;
         TouchAction.Invoke(TouchEvent.Click, leftRight, eventData.position, eventData.delta);
 
     }
@@ -37,7 +37,7 @@ public class InputManager : Singleton<InputManager>, IPointerClickHandler , IPoi
 
     public void OnDrag(PointerEventData eventData)
     {
-        TouchAction.Invoke(TouchEvent.Drag, RotationDir.Idle, eventData.position, eventData.delta);
+        TouchAction.Invoke(TouchEvent.Drag, ClickHorizonDir.Idle, eventData.position, eventData.delta);
         _isDrag = true;
 
     }
