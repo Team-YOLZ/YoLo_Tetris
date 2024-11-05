@@ -5,7 +5,7 @@ using UnityEngine;
 using static Define;
 
 [CreateAssetMenu]
-public class TetrominoBoundaryData : ScriptableObject
+public class TetrominoData : ScriptableObject
 {
     public MinoType MinoType;
     public BoundaryData HorizonBoundary;
