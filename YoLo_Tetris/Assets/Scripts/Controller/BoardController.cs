@@ -12,7 +12,8 @@ public class BoardController : MonoBehaviour
 
     private struct Cell
     {
-        int id;
+        int x;
+        int y;
         GameObject mino;
     }
 
