@@ -7,7 +7,7 @@ using static Define;
 [CreateAssetMenu]
 public class TetrominoData : ScriptableObject
 {
-    public MinoType MinoType;
+    public TetrominoType TetrominoType;
     public BoundaryData HorizonBoundary;
 
     [Serializable]

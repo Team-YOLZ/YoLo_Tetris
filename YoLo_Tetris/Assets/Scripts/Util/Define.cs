@@ -45,7 +45,7 @@ public class Define
         
     }
 
-    public enum MinoType
+    public enum TetrominoType
     {
         Unknown,
         O = 79,
@@ -55,11 +55,11 @@ public class Define
         J = 74,
         L = 76,
         T = 84,
-
+        
     }
 
     // 반시계방향 left click
-    public enum MinoRotationState
+    public enum RotationState
     {
         R0, //초기상태 0 (0)
         R1, //회전 90   (90)
