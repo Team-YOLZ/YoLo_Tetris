@@ -2,22 +2,29 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using DG.Tweening;
-using static Define;
 using System;
+using UniRx;
+using Cysharp.Threading.Tasks;
+using static Define;
 
 public class TetrominoController : MonoBehaviour
 {
+    private CompositeDisposable _subscriber = new();
+    private IDisposable _disposableSlowDown;
+
     [SerializeField] private RectTransform _tetromino; // 자기 자신 위치
     [SerializeField] private RectTransform _gameMainCanvas;
-    [SerializeField] private TetrominoBoundaryData _data;
-    [SerializeField] private MinoController[] _minoControllers;
+    [SerializeField] private TetrominoData _data;
+    [SerializeField] private MinoController[] _minoControllers; //** 없음
 
     private const float _autoDownSpeed = 400.0f; //떨어지는 속도
     private const float _slowDownSpeed = 80.0f; //떨어지는 속도
     private const float _quickDownForce = 9.5f; //테트로미노가 바로 떨어지게하는 힘의 양
     private const float _minoPixelSize = 65.0f; //테트로미노 65x65
     private bool _isLanding = false; //착지했는가?
+    private const float _intervalTime = 3.0f;
 
+    readonly private Data _data1;
     readonly private Vector3 _rotateVec = new Vector3(0, 0, 90);
     private Vector2 _curDragPosition = Vector2.zero;
     private Vector2 _PrevDragPosition = Vector2.zero;
@@ -28,33 +35,42 @@ public class TetrominoController : MonoBehaviour
     private MoveDir _moveDir = MoveDir.Idle;
     private ClickHorizonDir _clickHorizonDir = ClickHorizonDir.Idle; 
     private DragHorizonDir _dragHorizonDir = DragHorizonDir.Idle; //드래그 왼/오
-    private MinoType _minoType = MinoType.Unknown;
-    private MinoRotationState _minoRotationState = MinoRotationState.R0;
-    public MinoRotationState MinoRotationState
+    private TetrominoType _tetrominoType = TetrominoType.Unknown;
+    private RotationState _rotationState = RotationState.R0;
+
+    public RotationState MinoRotationState
     {
-        get { return _minoRotationState; }
+        get { return _rotationState; }
         set
         {
-            if (_minoRotationState == value)
+            if (_rotationState == value)
                 return;
-            _minoRotationState = value;
+            _rotationState = value;
         }
     }
 
 
     void Awake()
     {
-        if(_minoType == MinoType.Unknown)
+        if(_tetrominoType == TetrominoType.Unknown)
         {
-            var name =  (MinoType)(int)gameObject.name[0];
-            _minoType = name;
+            var name =  (TetrominoType)(int)gameObject.name[0];
+            _tetrominoType = name;
         }
 
         InputManager.Instance.TouchAction += TouchState;
         InputManager.Instance.BeginDragAction += GetBeginDragPosition;
         InputManager.Instance.IsEndDragAction += IsEndDrag;
 
-        StartAutoDown();
+        //AutoMove();
+        //StartAutoDown();
+    }
+
+    private void Start()
+    {
+        OnMove2().Forget();
+        ProcessAsyncTask().Forget();
+        Invoke(nameof(AutoMove), 2); // AutoMove();
     }
 
     void OnDestroy()
@@ -62,22 +78,23 @@ public class TetrominoController : MonoBehaviour
         InputManager.Instance.TouchAction -= TouchState;
         InputManager.Instance.BeginDragAction -= GetBeginDragPosition;
         InputManager.Instance.IsEndDragAction -= IsEndDrag;
+        _subscriber.Dispose();
     }
 
-    void StartAutoDown()
-    {
-        StopAutoDown();
-        _autoDownCoroutine = StartCoroutine(nameof(AutoDownMove));
-    }
+    //void StartAutoDown()
+    //{
+    //    StopAutoDown();
+    //    _autoDownCoroutine = StartCoroutine(nameof(AutoDownMove));
+    //}
 
-    void StopAutoDown()
-    {
-        if (_autoDownCoroutine != null)
-        {
-            StopCoroutine(_autoDownCoroutine);
-            _autoDownCoroutine = null;
-        }
-    }
+    //void StopAutoDown()
+    //{
+    //    if (_autoDownCoroutine != null)
+    //    {
+    //        StopCoroutine(_autoDownCoroutine);
+    //        _autoDownCoroutine = null;
+    //    }
+    //}
 
     void StartSlowDown()
     {
@@ -97,12 +114,15 @@ public class TetrominoController : MonoBehaviour
     //아래로 한 칸씩 이동
     void OneStepDownMove()
     {
+        Debug.Log("OneStepDownMove");
+
         float destPosY = _tetromino.anchoredPosition.y - _minoPixelSize;
         _tetromino.DOAnchorPosY(destPosY, 0);
-        //foreach(var mino in _minoControllers)
-        //{
-        //    mino.MinoMove(0, -1);
-        //}
+
+        foreach (var minos in _minoControllers)
+        {
+            minos._position.y -= 1;
+        }
     }
 
 
@@ -113,7 +133,7 @@ public class TetrominoController : MonoBehaviour
         {
             case TouchEvent.Click:
                 _clickHorizonDir = leftRight;
-                _minoRotationState = GetRotationState();
+                _rotationState = GetRotationState();
                 UpdateRotate();
                 UpdatePositionAfterClick();
                 break;
@@ -126,18 +146,18 @@ public class TetrominoController : MonoBehaviour
     }
 
     #region Click Method
-    MinoRotationState GetRotationState()
+    RotationState GetRotationState()
     {
-        var state = _minoRotationState;
+        var state = _rotationState;
         switch (_clickHorizonDir)
         {
             case ClickHorizonDir.Left:
-                int leftRotation = (int)_minoRotationState + 1 == 4 ? 0 : (int)_minoRotationState + 1;
-                state = (MinoRotationState)leftRotation;
+                int leftRotation = (int)_rotationState + 1 == 4 ? 0 : (int)_rotationState + 1;
+                state = (RotationState)leftRotation;
                 break;
             case ClickHorizonDir.Right:
-                int rightRotation = (int)_minoRotationState - 1 == -1 ? 3 : (int)_minoRotationState - 1;
-                state = (MinoRotationState)rightRotation;
+                int rightRotation = (int)_rotationState - 1 == -1 ? 3 : (int)_rotationState - 1;
+                state = (RotationState)rightRotation;
                 break;
         }
         return state;
@@ -164,18 +184,18 @@ public class TetrominoController : MonoBehaviour
         Vector2 curBoundary = Vector2.zero;
         float curPositionX = _tetromino.anchoredPosition.x;
 
-        switch (_minoRotationState)
+        switch (_rotationState)
         {
-            case MinoRotationState.R0:
+            case RotationState.R0:
                 curBoundary = _data.HorizonBoundary.R0;
                 break;
-            case MinoRotationState.R1:
+            case RotationState.R1:
                 curBoundary = _data.HorizonBoundary.R1;
                 break;
-            case MinoRotationState.R2:
+            case RotationState.R2:
                 curBoundary = _data.HorizonBoundary.R2;
                 break;
-            case MinoRotationState.R3:
+            case RotationState.R3:
                 curBoundary = _data.HorizonBoundary.R3;
                 break;
         }
@@ -208,6 +228,10 @@ public class TetrominoController : MonoBehaviour
                     _tetromino.DOAnchorPosX(GetClampPositionHorizonBoundary(destPos), 0);
                     _PrevDragPosition = _curDragPosition;
                     _dragHorizonDir = DragHorizonDir.Left;
+                    foreach(var minos in _minoControllers)
+                    {
+                        minos._position.x -= 1;
+                    }
                 }
                 //right
                 else if (distance < 0 && force >= 1)
@@ -216,6 +240,10 @@ public class TetrominoController : MonoBehaviour
                     _tetromino.DOAnchorPosX(GetClampPositionHorizonBoundary(destPos), 0);
                     _PrevDragPosition = _curDragPosition;
                     _dragHorizonDir = DragHorizonDir.Right;
+                    foreach (var minos in _minoControllers)
+                    {
+                        minos._position.x += 1;
+                    }
                 }
                 break;
 
@@ -266,18 +294,18 @@ public class TetrominoController : MonoBehaviour
     //이동중에 경계 못 벗어나게 좌표 구하기
     float GetClampPositionHorizonBoundary(float positionX)
     {
-        switch (_minoRotationState)
+        switch (_rotationState)
         {
-            case MinoRotationState.R0:
+            case RotationState.R0:
                 positionX = Mathf.Clamp(positionX, _data.HorizonBoundary.R0.x, _data.HorizonBoundary.R0.y);
                 break;
-            case MinoRotationState.R1:
+            case RotationState.R1:
                 positionX = Mathf.Clamp(positionX, _data.HorizonBoundary.R1.x, _data.HorizonBoundary.R1.y);
                 break;
-            case MinoRotationState.R2:
+            case RotationState.R2:
                 positionX = Mathf.Clamp(positionX, _data.HorizonBoundary.R2.x, _data.HorizonBoundary.R2.y);
                 break;
-            case MinoRotationState.R3:
+            case RotationState.R3:
                 positionX = Mathf.Clamp(positionX, _data.HorizonBoundary.R3.x, _data.HorizonBoundary.R3.y);
                 break;
         }
@@ -287,15 +315,55 @@ public class TetrominoController : MonoBehaviour
 
 
     #region Coroutine Method
-    IEnumerator AutoDownMove()
+    private void AutoMove()
     {
-        while (!_isLanding)
-        {
-            yield return new WaitForSeconds(_autoDownSpeed * Time.deltaTime);
-            OneStepDownMove();
-        }
-        StopCoroutine(AutoDownMove());
+        Debug.Log($"[AutoDownMove] Start ");
+        Observable.Interval(TimeSpan.FromSeconds(_intervalTime))
+            .ObserveOn(Scheduler.MainThread)  
+            .Subscribe(_ =>
+            {
+                OneStepDownMove();
+            }).AddTo(_subscriber);
+
     }
+
+    private async UniTask OnMove()
+    {
+        await UniTask.WaitForSeconds(1.0f);
+    }
+
+    private async UniTaskVoid OnMove2()
+    {
+        Debug.Log(1);
+        await OnMove();
+        Debug.Log(2);
+        await OnMove();
+        Debug.Log(3);
+        await OnMove();
+        Debug.Log(4);
+        await OnMove();
+        Debug.Log(5);
+    }
+
+    public async UniTask ProcessAsyncTask()
+    {
+        await UniTask.WaitUntil(() => _isLanding);
+
+        Debug.Log($"Landing Success");
+    }
+
+    //IEnumerator AutoDownMove()
+    //{
+    //    Debug.Log($"[AutoDownMove] Start ");
+    //    while (!_isLanding)
+    //    {
+    //        float intervalTime = (float)TimeSpan.FromSeconds(_intervalTime).TotalSeconds; //여기에 interval 시간 메서드 짜서 바꾸면intervalTime
+    //        Debug.Log($"intervalTime = {intervalTime}");
+    //        yield return new WaitForSeconds(intervalTime);
+    //        OneStepDownMove();
+    //    }
+    //    StopCoroutine(AutoDownMove());
+    //}
 
     IEnumerator SlowDownMove()
     {
@@ -308,5 +376,10 @@ public class TetrominoController : MonoBehaviour
     }
     #endregion
 
+    //private int PolicyId(int id)
+    //{
+    //    int adqwdqwd = 123456789;
 
+    //    return HashCode.Combine(id, adqwdqwd);
+    //}
 }
