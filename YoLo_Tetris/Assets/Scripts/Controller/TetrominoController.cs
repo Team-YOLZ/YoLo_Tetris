@@ -9,20 +9,23 @@ using static Define;
 
 public class TetrominoController : MonoBehaviour
 {
-    private CompositeDisposable _subscriber = new();
-    private IDisposable _disposableSlowDown;
+    private CompositeDisposable _autoMoveSubscriber = new();
+    private CompositeDisposable _forceMoveSubscriber = new();
+    //private IDisposable _autoMoveSubscription;
 
     [SerializeField] private RectTransform _tetromino; // 자기 자신 위치
     [SerializeField] private RectTransform _gameMainCanvas;
     [SerializeField] private TetrominoData _data;
-    [SerializeField] private MinoController[] _minoControllers; //** 없음
+    [SerializeField] private MinoController[] _minoControllers;
+    [SerializeField] private BoardController _boardController;
 
-    private const float _autoDownSpeed = 400.0f; //떨어지는 속도
-    private const float _slowDownSpeed = 80.0f; //떨어지는 속도
-    private const float _quickDownForce = 9.5f; //테트로미노가 바로 떨어지게하는 힘의 양
+
+    private const float _quickDownForce = 15.0f; //테트로미노가 바로 떨어지게하는 힘의 양
     private const float _minoPixelSize = 65.0f; //테트로미노 65x65
+    private const float _autoDownIntervalTime = 3.0f;
+    private const float _slowDownIntervalTime = 0.2f;
     private bool _isLanding = false; //착지했는가?
-    private const float _intervalTime = 3.0f;
+
 
     readonly private Data _data1;
     readonly private Vector3 _rotateVec = new Vector3(0, 0, 90);
@@ -62,15 +65,13 @@ public class TetrominoController : MonoBehaviour
         InputManager.Instance.BeginDragAction += GetBeginDragPosition;
         InputManager.Instance.IsEndDragAction += IsEndDrag;
 
-        //AutoMove();
-        //StartAutoDown();
     }
 
     private void Start()
     {
-        OnMove2().Forget();
-        ProcessAsyncTask().Forget();
-        Invoke(nameof(AutoMove), 2); // AutoMove();
+        //OnMove2().Forget();
+        //ProcessAsyncTask().Forget();
+        Invoke(nameof(AutoMove), 2); 
     }
 
     void OnDestroy()
@@ -78,44 +79,13 @@ public class TetrominoController : MonoBehaviour
         InputManager.Instance.TouchAction -= TouchState;
         InputManager.Instance.BeginDragAction -= GetBeginDragPosition;
         InputManager.Instance.IsEndDragAction -= IsEndDrag;
-        _subscriber.Dispose();
-    }
-
-    //void StartAutoDown()
-    //{
-    //    StopAutoDown();
-    //    _autoDownCoroutine = StartCoroutine(nameof(AutoDownMove));
-    //}
-
-    //void StopAutoDown()
-    //{
-    //    if (_autoDownCoroutine != null)
-    //    {
-    //        StopCoroutine(_autoDownCoroutine);
-    //        _autoDownCoroutine = null;
-    //    }
-    //}
-
-    void StartSlowDown()
-    {
-        StopSlowDown();
-        _slowDownCoroutine = StartCoroutine(nameof(SlowDownMove));
-    }
-
-    void StopSlowDown()
-    {
-        if(_slowDownCoroutine != null)
-        {
-            StopCoroutine(_slowDownCoroutine);
-            _slowDownCoroutine = null;
-        }
+        _autoMoveSubscriber.Dispose();
+        _forceMoveSubscriber.Dispose();
     }
 
     //아래로 한 칸씩 이동
-    void OneStepDownMove()
+    private void OneStepDownMove()
     {
-        Debug.Log("OneStepDownMove");
-
         float destPosY = _tetromino.anchoredPosition.y - _minoPixelSize;
         _tetromino.DOAnchorPosY(destPosY, 0);
 
@@ -248,7 +218,8 @@ public class TetrominoController : MonoBehaviour
                 break;
 
             case MoveDir.SlowDown:
-                StartSlowDown();
+                StopAutoMove();
+                SlowDownMove();
                 break;
 
             case MoveDir.QuickDown:
@@ -285,7 +256,11 @@ public class TetrominoController : MonoBehaviour
     void IsEndDrag(bool drag)
     {
         if (_moveDir == MoveDir.SlowDown)
-            StopSlowDown();
+        {
+            //StopSlowDown();
+            StopForcedMove();
+            AutoMove();
+        }
 
         _moveDir = MoveDir.Idle;
         
@@ -318,13 +293,45 @@ public class TetrominoController : MonoBehaviour
     private void AutoMove()
     {
         Debug.Log($"[AutoDownMove] Start ");
-        Observable.Interval(TimeSpan.FromSeconds(_intervalTime))
+
+        _autoMoveSubscriber.Clear();
+
+        Observable.Interval(TimeSpan.FromSeconds(_autoDownIntervalTime))
             .ObserveOn(Scheduler.MainThread)  
             .Subscribe(_ =>
             {
                 OneStepDownMove();
-            }).AddTo(_subscriber);
+            }).AddTo(_autoMoveSubscriber);
+    }
 
+    private void StopAutoMove()
+    {
+        Debug.Log($"[StopAutoMove] Clear ");
+        _autoMoveSubscriber.Clear();
+    }
+
+    private void SlowDownMove()
+    {
+        Debug.Log($"[SlowDownMove] Start ");
+
+        _forceMoveSubscriber.Clear();
+
+        Observable.Interval(TimeSpan.FromSeconds(_slowDownIntervalTime))
+            .ObserveOn(Scheduler.MainThread)
+            .Subscribe(_ =>
+            {
+                OneStepDownMove();
+            }).AddTo(_forceMoveSubscriber);
+    }
+
+    private void QuickDownMove()
+    {
+        
+    }
+
+    private void StopForcedMove()
+    {
+        _forceMoveSubscriber.Clear();
     }
 
     private async UniTask OnMove()
@@ -352,28 +359,6 @@ public class TetrominoController : MonoBehaviour
         Debug.Log($"Landing Success");
     }
 
-    //IEnumerator AutoDownMove()
-    //{
-    //    Debug.Log($"[AutoDownMove] Start ");
-    //    while (!_isLanding)
-    //    {
-    //        float intervalTime = (float)TimeSpan.FromSeconds(_intervalTime).TotalSeconds; //여기에 interval 시간 메서드 짜서 바꾸면intervalTime
-    //        Debug.Log($"intervalTime = {intervalTime}");
-    //        yield return new WaitForSeconds(intervalTime);
-    //        OneStepDownMove();
-    //    }
-    //    StopCoroutine(AutoDownMove());
-    //}
-
-    IEnumerator SlowDownMove()
-    {
-        while (!_isLanding)
-        {
-            yield return new WaitForSeconds(_slowDownSpeed * Time.deltaTime);
-            OneStepDownMove();
-        }
-        StopCoroutine(SlowDownMove());
-    }
     #endregion
 
     //private int PolicyId(int id)
