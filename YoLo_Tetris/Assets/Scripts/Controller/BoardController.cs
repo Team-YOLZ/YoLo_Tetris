@@ -2,16 +2,20 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using DG.Tweening;
 
 public class BoardController : MonoBehaviour
 {
     private const int INITIAL_POOL_SIZE = 200;
     private const int BOARD_WIDTH = 10;
+    private const float MINO_PIXEL_SIZE = 65.0f;
+    readonly private Cell EMPTY_CELL = new();
 
     [SerializeField] private Transform _TetrominosParent;
 
     private Queue<string> _spawnOrder = new Queue<string>();
     private List<Cell> _minos = new();
+    private List<int> _lineToRemove = new();
     private CellPool _cellPool;
 
     private class CellPool
@@ -44,6 +48,7 @@ public class BoardController : MonoBehaviour
             if (pool.Count() < capacity)
                 pool.Push(cell);
         }
+
     }
 
     private struct Cell
@@ -78,11 +83,31 @@ public class BoardController : MonoBehaviour
         int maxY = 0;
         foreach(var mino in _minos)
         {
-            if (mino.X == pos.x && mino.Y < pos.y && mino.Y > maxY)
+            bool checkLand = mino.X == pos.x && mino.Y < pos.y && mino.Y > maxY;
+            if (checkLand)
                 maxY = mino.Y;
         }
 
         return maxY;
+    }
+
+    //회전시 테트로미노가 벽에 부딪치는지 체크
+    public bool CheckOverlapWall(Vector2Int[] minos)
+    {
+        bool check = false;
+        foreach(var mino in minos)
+        {
+            int x = mino.x;
+            int y = mino.y;
+            Cell result = _minos.Find(m => m.X == x && m.Y == y);
+            if (!result.Equals(EMPTY_CELL))
+            {
+                check = true;
+                break;
+            }
+        }
+
+        return check;
     }
 
     //테트로미노가 놓인 후 각 셀에 놓인 오브젝트를 list에 추가
@@ -99,19 +124,19 @@ public class BoardController : MonoBehaviour
         var lineCount = _minos.GroupBy(m => m.Y)
                               .Select(g => new { Y = g.Key, Count = g.Count() });
 
-        List<int> lineToRemove = new();
-        foreach(var line in lineCount)
+        _lineToRemove.Clear();
+        foreach (var line in lineCount)
         {
             if(line.Count == BOARD_WIDTH)
             {
                 RemoveMinos(line.Y);
-                lineToRemove.Add(line.Y);
+                _lineToRemove.Add(line.Y);
             }
         }
 
-        if (lineToRemove.Count() > 0)
+        if (_lineToRemove.Count() > 0)
         {
-            LineDown(lineToRemove);
+            LineDown();
         }
     }
 
@@ -129,25 +154,26 @@ public class BoardController : MonoBehaviour
     }
 
     //제거 후 위에 남은 테트로미노들 아래로 이동
-    private void LineDown(List<int> lineToRemove)
+    private void LineDown()
     {
-        lineToRemove.Sort((a, b) => { return a.CompareTo(b); });
+        _lineToRemove.Sort((a, b) => { return a.CompareTo(b); });
 
-        foreach(var y in lineToRemove)
+        foreach(var y in _lineToRemove)
         {
             var minosToMove = _minos.Where(m => m.Y > y).ToList();
+            float destPosY = y - MINO_PIXEL_SIZE;
             foreach(var mino in minosToMove)
             {
                 if(mino.Go != null)
                 {
-                    //todo 미노오브젝트 한칸 밑으로 내리기
+                    mino.Go.GetComponent<RectTransform>().DOAnchorPosY(destPosY, 0);
                     mino.DecreaseY();
                 }
             }
         }
     }
     
-    #region Create
+    #region Spawn
     private void GetSpawnOrderSevenBag()
     {
         char[] bag = "IJLOSTZ".ToCharArray();
@@ -166,8 +192,7 @@ public class BoardController : MonoBehaviour
         {
             GetSpawnOrderSevenBag();
         }
-        string path = _spawnOrder.Peek() + "_Tetromino";
-        _spawnOrder.Dequeue();
+        string path = $"{ _spawnOrder.Dequeue() }_Tetromino";
 
         //todo -오브젝트풀링
         Managers.Resource.Instantiate(path, _TetrominosParent);
