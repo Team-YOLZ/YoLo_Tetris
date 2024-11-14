@@ -3,12 +3,11 @@ using System.Collections.Generic;
 using UnityEngine;
 using static Define;
 
-public class Data : MonoBehaviour
+public class Data 
 {
     private static readonly float Cos = Mathf.Cos(Mathf.PI / 2f);
     private static readonly float Sin = Mathf.Sin(Mathf.PI / 2f);
-    public static readonly float[] LeftRotationMatrix = new float[] { Cos, Sin, -Sin, Cos };
-    public static readonly float[] RightRotationMatrix = new float[] { -Cos, -Sin, Sin, -Cos };
+    public static readonly float[] RotationMatrix = new float[] { Cos, Sin, -Sin, Cos };
 
     //I_Tetromino의 회전 기준점만 달라서
     public static readonly Vector2Int[,] RotationMatrixI = {
