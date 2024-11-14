@@ -15,6 +15,7 @@ public class BoardController : MonoBehaviour
 
     private Queue<string> _spawnOrder = new Queue<string>();
     private List<Cell> _minos = new();
+    private List<Vector2Int> _walls = new();
     private List<int> _lineToRemove = new();
     private CellPool _cellPool;
 
@@ -75,6 +76,15 @@ public class BoardController : MonoBehaviour
     private void Awake()
     {
         _cellPool = new CellPool(INITIAL_POOL_SIZE);
+        Initailize();
+    }
+
+    private void Initailize()
+    {
+        for(int y = 0; y < 22; y++)
+            for(int x = 0; x < 12; x++)
+                if(x==0||y==0||x==11||y==21)
+                    _walls.Add(new Vector2Int(x, y));
     }
 
     // pos 위치에서 바닥찾기
@@ -99,12 +109,18 @@ public class BoardController : MonoBehaviour
         {
             int x = mino.x;
             int y = mino.y;
-            Cell result = _minos.Find(m => m.X == x && m.Y == y);
-            if (!result.Equals(EMPTY_CELL))
-            {
-                check = true;
-                break;
-            }
+
+            bool result2 = _minos.Exists(m => m.X == x && m.Y == y);
+            bool result3 = _walls.Exists(m => m.x == x && m.y == y);
+            if (result2 || result3) return true;
+
+            //Cell result = _minos.Find(m => m.X == x && m.Y == y);
+            //if (!result.Equals(EMPTY_CELL))
+            //{
+            //    //부딪침
+            //    check = true;
+            //    break;
+            //}
         }
 
         return check;
