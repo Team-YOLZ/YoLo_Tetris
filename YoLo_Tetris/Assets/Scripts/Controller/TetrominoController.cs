@@ -9,49 +9,39 @@ using static Define;
 
 public class TetrominoController : MonoBehaviour
 {
-    private CompositeDisposable _autoMoveSubscriber = new();
-    private CompositeDisposable _forceMoveSubscriber = new();
+    private const float MINO_PIXEL_SIZE = 65.0f; //테트로미노 65x65
+    private const float QUICK_DOWN_FORCE = 65.0f; //테트로미노가 바로 떨어지게하는 힘의 양
+    private const float AUTO_DOWN_INTERVAL_TIME = 3.0f;
+    private const float SLOW_DOWN_INTERVAL_TIME = 0.2f;
+    private const float QUICK_DOWN_INTERVAL_TIME = 0f;
+    readonly private float[] MATRIX = Data.RotationMatrix;
+    readonly private Vector2Int[,] I_MATRIX = Data.RotationMatrixI;
+    readonly private Vector3 ROTATION_VECTOR = new Vector3(0, 0, 90);
+
+    private CompositeDisposable _moveSubscriber = new();
     //private IDisposable _autoMoveSubscription;
 
-    [SerializeField] private RectTransform _tetromino; // 자기 자신 위치
+    [SerializeField] private RectTransform _tetromino;
     [SerializeField] private RectTransform _gameMainCanvas;
-    [SerializeField] private TetrominoData _data;
     [SerializeField] private MinoController[] _minoControllers;
     [SerializeField] private BoardController _boardController;
 
-
-    private const float _quickDownForce = 15.0f; //테트로미노가 바로 떨어지게하는 힘의 양
-    private const float _minoPixelSize = 65.0f; //테트로미노 65x65
-    private const float _autoDownIntervalTime = 3.0f;
-    private const float _slowDownIntervalTime = 0.2f;
-    private bool _isLanding = false; //착지했는가?
-
-
-    readonly private Data _data1;
-    readonly private Vector3 _rotateVec = new Vector3(0, 0, 90);
+    private float _intervalTime = 0f;
+    private bool _isForceMoveDown = false;
+    private bool _isDeleyLanding = false;
+    private bool _isCompletionLanding = false;
     private Vector2 _curDragPosition = Vector2.zero;
     private Vector2 _PrevDragPosition = Vector2.zero;
-
-    private Coroutine _autoDownCoroutine;
-    private Coroutine _slowDownCoroutine;
+    private Vector2Int[] _nextCell = new Vector2Int[4];
+    private Vector2Int[] _curCell = new Vector2Int[4];
+    private Vector2Int[] _prevCell = new Vector2Int[4];
+    private Vector2Int[,] _wallKick;
 
     private MoveDir _moveDir = MoveDir.Idle;
     private ClickHorizonDir _clickHorizonDir = ClickHorizonDir.Idle; 
-    private DragHorizonDir _dragHorizonDir = DragHorizonDir.Idle; //드래그 왼/오
+    private DragHorizonDir _dragHorizonDir = DragHorizonDir.Idle;
     private TetrominoType _tetrominoType = TetrominoType.Unknown;
     private RotationState _rotationState = RotationState.R0;
-
-    public RotationState MinoRotationState
-    {
-        get { return _rotationState; }
-        set
-        {
-            if (_rotationState == value)
-                return;
-            _rotationState = value;
-        }
-    }
-
 
     void Awake()
     {
@@ -60,18 +50,25 @@ public class TetrominoController : MonoBehaviour
             var name =  (TetrominoType)(int)gameObject.name[0];
             _tetrominoType = name;
         }
+        _wallKick = Data.WallKicks[_tetrominoType];
 
         InputManager.Instance.TouchAction += TouchState;
         InputManager.Instance.BeginDragAction += GetBeginDragPosition;
         InputManager.Instance.IsEndDragAction += IsEndDrag;
 
+        for(int i = 0; i< _minoControllers.Length; i++)
+        {
+            _curCell[i] = _minoControllers[i]._position;
+            _prevCell[i] = _minoControllers[i]._position;
+        }
+
     }
 
     private void Start()
     {
-        //OnMove2().Forget();
-        //ProcessAsyncTask().Forget();
-        Invoke(nameof(AutoMove), 2); 
+        ProcessAsyncTaskDeleyLanding().Forget();
+        ProcessAsyncTaskCompleteLanding().Forget();
+        Invoke(nameof(StartMove), 0);
     }
 
     void OnDestroy()
@@ -79,33 +76,72 @@ public class TetrominoController : MonoBehaviour
         InputManager.Instance.TouchAction -= TouchState;
         InputManager.Instance.BeginDragAction -= GetBeginDragPosition;
         InputManager.Instance.IsEndDragAction -= IsEndDrag;
-        _autoMoveSubscriber.Dispose();
-        _forceMoveSubscriber.Dispose();
+        _moveSubscriber.Dispose();
     }
 
     //아래로 한 칸씩 이동
     private void OneStepDownMove()
     {
-        float destPosY = _tetromino.anchoredPosition.y - _minoPixelSize;
-        _tetromino.DOAnchorPosY(destPosY, 0);
+        NextCellInitailize(0, -1);
+        bool checkWall = _boardController.CheckOverlapWall(_nextCell);
 
-        foreach (var minos in _minoControllers)
+        if (!checkWall)
         {
-            minos._position.y -= 1;
+            float destPosY = _tetromino.anchoredPosition.y - MINO_PIXEL_SIZE;
+            _tetromino.DOAnchorPosY(destPosY, 0);
+            ApplyCell(0, -1);
+        }
+        else if(checkWall && !_isDeleyLanding) _isDeleyLanding = true;
+        else if (checkWall && _isDeleyLanding) _isCompletionLanding = true;
+    }
+
+    // 좌/우 한 칸씩 이동
+    private void OneStepHorizonMove()
+    {
+        int direction = _dragHorizonDir == DragHorizonDir.Left ? -1 : 1;
+        NextCellInitailize(direction, 0);
+
+        if (!_boardController.CheckOverlapWall(_nextCell))
+        {
+            float destPosX = _tetromino.anchoredPosition.x + MINO_PIXEL_SIZE * direction;
+            _tetromino.DOAnchorPosX(destPosX, 0);
+            ApplyCell(direction, 0);
+        }
+
+        _PrevDragPosition = _curDragPosition;
+    }
+
+    private void NextCellInitailize(int dirX, int dirY)
+    {
+        for (int i = 0; i < _minoControllers.Length; i++)
+        {
+            _nextCell[i].x = _curCell[i].x + dirX;
+            _nextCell[i].y = _curCell[i].y + dirY;
         }
     }
 
+    private void ApplyCell(int dirX, int dirY)
+    {
+        for (int i = 0; i < _minoControllers.Length; i++)
+        {
+            _curCell[i].x += dirX;
+            _curCell[i].y += dirY;
+            _prevCell[i].x += dirX;
+            _prevCell[i].y += dirY;
+        }
+    }
 
-    // 입력이벤트
-    void TouchState(TouchEvent touchEvent, ClickHorizonDir leftRight, Vector2 position, Vector2 delta)
+    // input event
+    void TouchState(TouchEvent touchEvent, ClickHorizonDir clickHorizonDir, Vector2 position, Vector2 delta)
     {
         switch (touchEvent)
         {
             case TouchEvent.Click:
-                _clickHorizonDir = leftRight;
+                if (_tetrominoType == TetrominoType.O) break;
+
+                _clickHorizonDir = clickHorizonDir;
                 _rotationState = GetRotationState();
-                UpdateRotate();
-                UpdatePositionAfterClick();
+                Rotate();
                 break;
 
             case TouchEvent.Drag:
@@ -132,109 +168,121 @@ public class TetrominoController : MonoBehaviour
         }
         return state;
     }
-
-    //회전
-    void UpdateRotate()
+    void Rotate()
     {
-        switch (_clickHorizonDir)
-        {
-            case ClickHorizonDir.Left:
-                _tetromino.transform.DORotate(_tetromino.rotation.eulerAngles + _rotateVec, 0);
-                break;
-            case ClickHorizonDir.Right:
-                _tetromino.transform.DORotate(_tetromino.rotation.eulerAngles - _rotateVec, 0);
-                break;
-        }
+        int wallKickIndex = GetWallKickIndex();
+        ApplyRotationMatrix(wallKickIndex);
 
+        int testIndex = GetWallKickTestIndex(wallKickIndex);
+
+        //Unable to rotate
+        if (testIndex == -1)
+            Array.Copy(_prevCell, _curCell, _prevCell.GetLength(0));
+        else
+        {
+            Array.Copy(_curCell, _prevCell, _curCell.GetLength(0));
+            UpdateRotate(wallKickIndex, testIndex);
+        }
     }
 
-    //클릭 후 경계선 넘어로 삐져 나오는 놈 처리
-    void UpdatePositionAfterClick()
+    int GetWallKickIndex()
     {
-        Vector2 curBoundary = Vector2.zero;
-        float curPositionX = _tetromino.anchoredPosition.x;
-
+        int index = -1;
         switch (_rotationState)
         {
             case RotationState.R0:
-                curBoundary = _data.HorizonBoundary.R0;
+                index = _clickHorizonDir == ClickHorizonDir.Left ? 6 : 1;
                 break;
             case RotationState.R1:
-                curBoundary = _data.HorizonBoundary.R1;
+                index = _clickHorizonDir == ClickHorizonDir.Left ? 0 : 3;
                 break;
             case RotationState.R2:
-                curBoundary = _data.HorizonBoundary.R2;
+                index = _clickHorizonDir == ClickHorizonDir.Left ? 2 : 5;
                 break;
             case RotationState.R3:
-                curBoundary = _data.HorizonBoundary.R3;
+                index = _clickHorizonDir == ClickHorizonDir.Left ? 4 : 7;
+                break;
+        }
+        return index;
+    }
+
+    void ApplyRotationMatrix(int rotationIndex)
+    {
+        int zeroIntervalX = _curCell[0].x;
+        int zeroIntervalY = _curCell[0].y;
+        int direction = _clickHorizonDir == ClickHorizonDir.Left ? 1 : -1;
+
+        for (int i = 0; i < _minoControllers.Length; i++)
+        {
+            switch (_tetrominoType)
+            {
+                case TetrominoType.I:
+                    _curCell[i].x += I_MATRIX[rotationIndex, i].x;
+                    _curCell[i].y += I_MATRIX[rotationIndex, i].y;
+                    break;
+                case TetrominoType.O:
+                    break;
+                default:
+                    int zeroBasisX = _curCell[i].x - zeroIntervalX;
+                    int zeroBasisY = _curCell[i].y - zeroIntervalY;
+                    int conversionX = (int)((zeroBasisX * MATRIX[0] * direction) + (zeroBasisY * MATRIX[2] * direction));
+                    int conversionY = (int)((zeroBasisX * MATRIX[1] * direction) + (zeroBasisY * MATRIX[3] * direction));
+                    _curCell[i].x = conversionX + zeroIntervalX;
+                    _curCell[i].y = conversionY + zeroIntervalY;
+                    break;
+            }
+        }
+
+    }
+
+    int GetWallKickTestIndex(int wallKickIndex)
+    {
+        for (int i = 0; i < _wallKick.GetLength(1); i++)
+        {
+            Vector2Int translation = _wallKick[wallKickIndex, i];
+
+            for (int m = 0; m < _curCell.Length; m++)
+            {
+                _curCell[m] += translation;
+            }
+
+            if (!_boardController.CheckOverlapWall(_curCell))
+                return i;
+            else
+            {
+                for (int m = 0; m < _curCell.Length; m++)
+                {
+                    _curCell[m] -= translation;
+                }
+            }
+        }
+        return -1;
+    }
+
+    //회전
+    void UpdateRotate(int wallKickIndex, int testIndex)
+    {
+        float destPosX = _tetromino.anchoredPosition.x + _wallKick[wallKickIndex, testIndex].x * MINO_PIXEL_SIZE;
+        float destPosY = _tetromino.anchoredPosition.y + _wallKick[wallKickIndex, testIndex].y * MINO_PIXEL_SIZE;
+
+        switch (_clickHorizonDir)
+        {
+            case ClickHorizonDir.Left:
+                _tetromino.transform.DORotate(_tetromino.rotation.eulerAngles + ROTATION_VECTOR, 0);
+                _tetromino.DOAnchorPos(new Vector2(destPosX, destPosY), 0);
+                break;
+            case ClickHorizonDir.Right:
+                _tetromino.transform.DORotate(_tetromino.rotation.eulerAngles - ROTATION_VECTOR, 0);
+                _tetromino.DOAnchorPos(new Vector2(destPosX, destPosY), 0);
                 break;
         }
 
-        if (curPositionX < curBoundary.x)
-            _tetromino.DOAnchorPosX(curBoundary.x, 0);
-        else if (curPositionX > curBoundary.y)
-            _tetromino.DOAnchorPosX(curBoundary.y, 0);
-
-        
     }
+
     #endregion
 
 
     #region Drag Method
-    //이동
-    void UpdateMove(Vector2 position, Vector2 delta)
-    {
-        _curDragPosition = UtilManager.ConvertScreentoLocalInRect(_gameMainCanvas,position);
-        float distance = _PrevDragPosition.x - _curDragPosition.x;
-
-        switch (_moveDir)
-        {
-            case MoveDir.HorizonDir:
-                int force = (int)(Mathf.Round(Mathf.Abs(distance)) / _minoPixelSize);
-                //left
-                if (distance > 0 && force >= 1)
-                {
-                    float destPos = _tetromino.anchoredPosition.x - _minoPixelSize * force;
-                    _tetromino.DOAnchorPosX(GetClampPositionHorizonBoundary(destPos), 0);
-                    _PrevDragPosition = _curDragPosition;
-                    _dragHorizonDir = DragHorizonDir.Left;
-                    foreach(var minos in _minoControllers)
-                    {
-                        minos._position.x -= 1;
-                    }
-                }
-                //right
-                else if (distance < 0 && force >= 1)
-                {
-                    float destPos = _tetromino.anchoredPosition.x + _minoPixelSize * force;
-                    _tetromino.DOAnchorPosX(GetClampPositionHorizonBoundary(destPos), 0);
-                    _PrevDragPosition = _curDragPosition;
-                    _dragHorizonDir = DragHorizonDir.Right;
-                    foreach (var minos in _minoControllers)
-                    {
-                        minos._position.x += 1;
-                    }
-                }
-                break;
-
-            case MoveDir.SlowDown:
-                StopAutoMove();
-                SlowDownMove();
-                break;
-
-            case MoveDir.QuickDown:
-                //todo
-                break;
-        }
-    }
-
-    //드래그 시작시 가하는 힘을 알기위한 포지션 변수 초기화
-    void GetBeginDragPosition(Vector2 position)
-    {
-        _curDragPosition = UtilManager.ConvertScreentoLocalInRect(_gameMainCanvas, position);
-        _PrevDragPosition = _curDragPosition;
-    }
-
     //드래그중일 때 상하, 좌우 중에 어떤걸로 움직이는지
     MoveDir GetMoveDir(Vector2 delta)
     {
@@ -247,117 +295,109 @@ public class TetrominoController : MonoBehaviour
 
         if (_moveDir == MoveDir.VerticalDir)
         {
-            dir = (Mathf.Abs(delta.y) > _quickDownForce) ? MoveDir.QuickDown : MoveDir.SlowDown;
+            dir = (Mathf.Abs(delta.y) > QUICK_DOWN_FORCE) ? MoveDir.QuickDown : MoveDir.SlowDown;
         }
 
         return dir;
     }
 
-    void IsEndDrag(bool drag)
+    //이동로직
+    void UpdateMove(Vector2 position, Vector2 delta)
     {
-        if (_moveDir == MoveDir.SlowDown)
-        {
-            //StopSlowDown();
-            StopForcedMove();
-            AutoMove();
-        }
+        _curDragPosition = UtilManager.ConvertScreentoLocalInRect(_gameMainCanvas,position);
+        float distance = _PrevDragPosition.x - _curDragPosition.x;
 
-        _moveDir = MoveDir.Idle;
-        
+        switch (_moveDir)
+        {
+            case MoveDir.HorizonDir:
+                _dragHorizonDir = distance > 0 ? DragHorizonDir.Left : DragHorizonDir.Right;
+                int force = (int)(Mathf.Round(Mathf.Abs(distance)) / MINO_PIXEL_SIZE);
+
+                if (force >= 1)
+                    OneStepHorizonMove();
+                break;
+
+            case MoveDir.SlowDown:
+            case MoveDir.QuickDown:
+                if (!_isForceMoveDown)
+                {
+                    _isForceMoveDown = true;
+                    ClearMove();
+                    StartMove();
+                };
+                break;
+        }
+    }
+    //드래그 시작시 가하는 힘을 알기위한 포지션 변수 초기화
+    void GetBeginDragPosition(Vector2 position)
+    {
+        _curDragPosition = UtilManager.ConvertScreentoLocalInRect(_gameMainCanvas, position);
+        _PrevDragPosition = _curDragPosition;
     }
 
-    //이동중에 경계 못 벗어나게 좌표 구하기
-    float GetClampPositionHorizonBoundary(float positionX)
+    void IsEndDrag(bool drag)
     {
-        switch (_rotationState)
+         _moveDir = MoveDir.Idle;
+
+        if (_isForceMoveDown)
         {
-            case RotationState.R0:
-                positionX = Mathf.Clamp(positionX, _data.HorizonBoundary.R0.x, _data.HorizonBoundary.R0.y);
-                break;
-            case RotationState.R1:
-                positionX = Mathf.Clamp(positionX, _data.HorizonBoundary.R1.x, _data.HorizonBoundary.R1.y);
-                break;
-            case RotationState.R2:
-                positionX = Mathf.Clamp(positionX, _data.HorizonBoundary.R2.x, _data.HorizonBoundary.R2.y);
-                break;
-            case RotationState.R3:
-                positionX = Mathf.Clamp(positionX, _data.HorizonBoundary.R3.x, _data.HorizonBoundary.R3.y);
-                break;
+            _isForceMoveDown = false;
+            ClearMove();
+            StartMove();
         }
-        return positionX;
     }
     #endregion
 
 
-    #region Coroutine Method
-    private void AutoMove()
+    #region UniRx UniTask Method
+    private void StartMove()
     {
-        Debug.Log($"[AutoDownMove] Start ");
+        _moveSubscriber.Clear();
 
-        _autoMoveSubscriber.Clear();
+        switch (_moveDir)
+        {
+            case MoveDir.SlowDown:
+                _intervalTime = SLOW_DOWN_INTERVAL_TIME;
+                break;
+            case MoveDir.QuickDown:
+                _intervalTime = QUICK_DOWN_INTERVAL_TIME;
+                break;
+            default:
+                _intervalTime = AUTO_DOWN_INTERVAL_TIME;
+                break;
+        }
 
-        Observable.Interval(TimeSpan.FromSeconds(_autoDownIntervalTime))
-            .ObserveOn(Scheduler.MainThread)  
-            .Subscribe(_ =>
-            {
-                OneStepDownMove();
-            }).AddTo(_autoMoveSubscriber);
-    }
-
-    private void StopAutoMove()
-    {
-        Debug.Log($"[StopAutoMove] Clear ");
-        _autoMoveSubscriber.Clear();
-    }
-
-    private void SlowDownMove()
-    {
-        Debug.Log($"[SlowDownMove] Start ");
-
-        _forceMoveSubscriber.Clear();
-
-        Observable.Interval(TimeSpan.FromSeconds(_slowDownIntervalTime))
+        Observable.Interval(TimeSpan.FromSeconds(_intervalTime))
             .ObserveOn(Scheduler.MainThread)
             .Subscribe(_ =>
             {
                 OneStepDownMove();
-            }).AddTo(_forceMoveSubscriber);
+            }).AddTo(_moveSubscriber);
     }
 
-    private void QuickDownMove()
+    private void ClearMove()
     {
-        
+        _moveSubscriber.Clear();
     }
 
-    private void StopForcedMove()
+    private async UniTaskVoid ProcessAsyncTaskDeleyLanding()
     {
-        _forceMoveSubscriber.Clear();
+        await UniTask.WaitUntil(() => _isDeleyLanding);
+        Debug.Log($"isDeleyLanding Success");
     }
 
-    private async UniTask OnMove()
+    private async UniTask ProcessAsyncTaskCompleteLanding()
     {
-        await UniTask.WaitForSeconds(1.0f);
+        await UniTask.WaitUntil(() => _isCompletionLanding);
+        Debug.Log($"isCompletionLanding Success");
+
+        ClearMove();
+        for (int i = 0; i < _minoControllers.Length; i++) 
+        {
+            _boardController.AddMinosList(_curCell[i], _minoControllers[i].gameObject);
+        }
     }
 
-    private async UniTaskVoid OnMove2()
-    {
-        Debug.Log(1);
-        await OnMove();
-        Debug.Log(2);
-        await OnMove();
-        Debug.Log(3);
-        await OnMove();
-        Debug.Log(4);
-        await OnMove();
-        Debug.Log(5);
-    }
-
-    public async UniTask ProcessAsyncTask()
-    {
-        await UniTask.WaitUntil(() => _isLanding);
-
-        Debug.Log($"Landing Success");
-    }
 
     #endregion
 
