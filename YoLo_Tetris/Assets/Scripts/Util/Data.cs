@@ -11,14 +11,14 @@ public class Data
 
     //I_Tetromino의 회전 기준점만 달라서
     public static readonly Vector2Int[,] RotationMatrixI = {
-        {new Vector2Int(1,   2), new Vector2Int(0,  1), new Vector2Int(-1, 0), new Vector2Int(-2, -1) }, // 0>>1
-        {new Vector2Int(-1, -2), new Vector2Int(0, -1), new Vector2Int(1,  0), new Vector2Int(2,   1) }, // 1>>0  
-        {new Vector2Int(2,  -1), new Vector2Int(1,  0), new Vector2Int(0,  1), new Vector2Int(-1,  2) }, // 1>>2
-        {new Vector2Int(-2,  1), new Vector2Int(-1, 0), new Vector2Int(0, -1), new Vector2Int(1,  -2) }, // 2>>1
-        {new Vector2Int(-1, -2), new Vector2Int(0, -1), new Vector2Int(1,  0), new Vector2Int(2,   1) }, // 2>>3
-        {new Vector2Int(1,   2), new Vector2Int(0,  1), new Vector2Int(-1, 0), new Vector2Int(-2, -1) }, // 3>>2
-        {new Vector2Int(-2,  1), new Vector2Int(-1, 0), new Vector2Int(0, -1), new Vector2Int(1,  -2) }, // 3>>0
-        {new Vector2Int(2,  -1), new Vector2Int(1,  0), new Vector2Int(0,  1), new Vector2Int(-1,  2) }  // 0>>3
+        {new Vector2Int(2,  -1), new Vector2Int(1,  0), new Vector2Int(0,  1), new Vector2Int(-1,  2) }, // 0>>1
+        {new Vector2Int(-2,  1), new Vector2Int(-1, 0), new Vector2Int(0, -1), new Vector2Int(1,  -2) }, // 1>>0
+        {new Vector2Int(1,   2), new Vector2Int(0,  1), new Vector2Int(-1, 0), new Vector2Int(-2, -1) }, // 1>>2
+        {new Vector2Int(-1, -2), new Vector2Int(0, -1), new Vector2Int(1,  0), new Vector2Int(2,   1) }, // 2>>1
+        {new Vector2Int(-2,  1), new Vector2Int(-1, 0), new Vector2Int(0, -1), new Vector2Int(1,  -2) }, // 2>>3                                                                                          
+        {new Vector2Int(2,  -1), new Vector2Int(1,  0), new Vector2Int(0,  1), new Vector2Int(-1,  2) }, // 3>>2
+        {new Vector2Int(-1, -2), new Vector2Int(0, -1), new Vector2Int(1,  0), new Vector2Int(2,   1) }, // 3>>0
+        {new Vector2Int(1,   2), new Vector2Int(0,  1), new Vector2Int(-1, 0), new Vector2Int(-2, -1) }, // 0>>3      
     };
 
     //test 5time
