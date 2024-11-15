@@ -13,6 +13,7 @@ public class BoardController : MonoBehaviour
 
     [SerializeField] private Transform _TetrominosParent;
 
+    private int countAddMino = 0; 
     private Queue<string> _spawnOrder = new Queue<string>();
     private List<Cell> _minos = new();
     private List<Vector2Int> _walls = new();
@@ -88,18 +89,18 @@ public class BoardController : MonoBehaviour
     }
 
     // pos 위치에서 바닥찾기
-    public int FindLand(Vector2Int pos)
-    {
-        int maxY = 0;
-        foreach(var mino in _minos)
-        {
-            bool checkLand = mino.X == pos.x && mino.Y < pos.y && mino.Y > maxY;
-            if (checkLand)
-                maxY = mino.Y;
-        }
+    //public int FindLand(Vector2Int pos)
+    //{
+    //    int maxY = 0;
+    //    foreach(var mino in _minos)
+    //    {
+    //        bool checkLand = mino.X == pos.x && mino.Y < pos.y && mino.Y > maxY;
+    //        if (checkLand)
+    //            maxY = mino.Y;
+    //    }
 
-        return maxY;
-    }
+    //    return maxY;
+    //}
 
     //회전시 테트로미노가 벽에 부딪치는지 체크
     public bool CheckOverlapWall(Vector2Int[] minos)
@@ -129,14 +130,17 @@ public class BoardController : MonoBehaviour
     //테트로미노가 놓인 후 각 셀에 놓인 오브젝트를 list에 추가
     public void AddMinosList(Vector2Int pos, GameObject go)
     {
+        Debug.Log("[AddMinosList] : " + pos);
         Cell cell = _cellPool.Get(pos.x, pos.y, go);
         _minos.Add(cell);
-        CheckLine();
+
+        if(++countAddMino == 4) CheckLine();
     }
 
     //놓인 후 모든 줄 체크
     private void CheckLine()
     {
+        countAddMino = 0;
         var lineCount = _minos.GroupBy(m => m.Y)
                               .Select(g => new { Y = g.Key, Count = g.Count() });
 
