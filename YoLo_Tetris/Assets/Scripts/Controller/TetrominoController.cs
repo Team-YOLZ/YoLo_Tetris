@@ -25,6 +25,7 @@ public class TetrominoController : MonoBehaviour
     [SerializeField] private RectTransform _gameMainCanvas;
     [SerializeField] private MinoController[] _minoControllers;
     [SerializeField] private BoardController _boardController;
+    [SerializeField] private RectTransformResetter _rectTransformResetter;
 
     private float _intervalTime = 0f;
     private bool _isForceMoveDown = false;
@@ -43,7 +44,7 @@ public class TetrominoController : MonoBehaviour
     private TetrominoType _tetrominoType = TetrominoType.Unknown;
     private RotationState _rotationState = RotationState.R0;
 
-    void Awake()
+    private void Awake()
     {
         if(_tetrominoType == TetrominoType.Unknown)
         {
@@ -52,26 +53,60 @@ public class TetrominoController : MonoBehaviour
         }
         _wallKick = Data.WallKicks[_tetrominoType];
 
+        //InputManager.Instance.TouchAction += TouchState;
+        //InputManager.Instance.BeginDragAction += GetBeginDragPosition;
+        //InputManager.Instance.IsEndDragAction += IsEndDrag;
+
+        //for(int i = 0; i< _minoControllers.Length; i++)
+        //{
+        //    _curCell[i] = _minoControllers[i]._position;
+        //    _prevCell[i] = _minoControllers[i]._position;
+        //}
+
+    }
+
+    //private void Start()
+    //{
+    //    ProcessAsyncTaskDeleyLanding().Forget();
+    //    ProcessAsyncTaskCompleteLanding().Forget();
+    //    Invoke(nameof(StartMove), 0);
+    //}
+
+    private void OnEnable()
+    {
+        Initialize();
+    }
+
+    private void OnDisable()
+    {
+        ClearAll();
+    }
+
+    private void Initialize()
+    {
         InputManager.Instance.TouchAction += TouchState;
         InputManager.Instance.BeginDragAction += GetBeginDragPosition;
         InputManager.Instance.IsEndDragAction += IsEndDrag;
 
-        for(int i = 0; i< _minoControllers.Length; i++)
+        _isForceMoveDown = false;
+        _isDeleyLanding = false;
+        _isCompletionLanding = false;
+        _rotationState = RotationState.R0;
+
+        _rectTransformResetter.ResetToInitialState();
+        for (int i = 0; i < _minoControllers.Length; i++)
         {
+            _minoControllers[i].GetComponent<RectTransformResetter>().ResetToInitialState();
             _curCell[i] = _minoControllers[i]._position;
             _prevCell[i] = _minoControllers[i]._position;
         }
 
-    }
-
-    private void Start()
-    {
         ProcessAsyncTaskDeleyLanding().Forget();
         ProcessAsyncTaskCompleteLanding().Forget();
         Invoke(nameof(StartMove), 0);
     }
 
-    void OnDestroy()
+    private void ClearAll()
     {
         InputManager.Instance.TouchAction -= TouchState;
         InputManager.Instance.BeginDragAction -= GetBeginDragPosition;
@@ -391,7 +426,7 @@ public class TetrominoController : MonoBehaviour
         await UniTask.WaitUntil(() => _isCompletionLanding);
         Debug.Log($"isCompletionLanding Success");
 
-        ClearMove();
+        ClearAll();
         for (int i = 0; i < _minoControllers.Length; i++) 
         {
             _boardController.AddMinosList(_curCell[i], _minoControllers[i].gameObject);
